@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Epic Platformer Game</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        .platform { position: absolute; background-color: gray; }
+        .broken { background-color: red; }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <audio id="breakSound" src="Assets/jump.wav"></audio>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const breakSound = document.getElementById('breakSound');
+
+        let player = { x: 100, y: canvas.height - 150, width: 50, height: 50, vx: 0, vy: 0, onGround: false };
+        let platforms = [];
+
+        class Platform {
+            constructor(x, y, width, height, isBroken = false) {
+                this.x = x;
+                this.y = y;
+                this.originalY = y;
+                this.width = width;
+                this.height = height;
+                this.isBroken = isBroken;
+                this.timeRemaining = 0;
+                this.active = true;
+                this.falling = false;
+                this.shakeAngle = 0;
+                this.rotation = 0;
+            }
+
+            draw() {
+                if (!this.active) return;
+                ctx.save();
+                ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
+                ctx.rotate(this.rotation);
+                ctx.fillStyle = this.isBroken ? 'red' : 'gray';
+                ctx.fillRect(-this.width / 2, -this.height / 2, this.width, this.height);
+                ctx.restore();
+            }
+
+            update() {
+                if (this.isBroken && this.timeRemaining > 0) {
+                    this.timeRemaining--;
+                    this.shakeAngle += 0.3;
+                    this.x += Math.sin(this.shakeAngle) * 2;
+                    if (this.timeRemaining === 59) breakSound.play();
+                    if (this.timeRemaining <= 0) {
+                        this.falling = true;
+                    }
+                }
+                if (this.falling) {
+                    this.y += 5; // fall speed
+                    this.rotation += 0.1; // spin while falling
+                    if (this.y > canvas.height) this.active = false; // remove after falling off screen
+                }
+            }
+        }
+
+        function addPlatform(x, y, width, height, isBroken = false) {
+            platforms.push(new Platform(x, y, width, height, isBroken));
+        }
+
+        function updatePlayer() {
+            player.vy += 1;  // gravity
+            player.onGround = false;
+
+            platforms.forEach(platform => {
+                if (!platform.active) return;
+
+                if (player.x + player.width > platform.x && player.x < platform.x + platform.width &&
+                    player.y + player.height <= platform.y && player.y + player.height + player.vy >= platform.y) {
+                    player.vy = 0;
+                    player.y = platform.y - player.height;
+                    player.onGround = true;
+
+                    if (platform.isBroken && platform.timeRemaining <= 0 && !platform.falling) {
+                        platform.timeRemaining = 60; // 1 second countdown
+                    }
+                }
+            });
+
+            player.vy = Math.min(player.vy, 20);
+            player.x += player.vx;
+            player.y += player.vy;
+
+            // Prevent player from falling off-screen
+            if (player.y > canvas.height) {
+                player.y = canvas.height - player.height;
+                player.vy = 0;
+                player.onGround = true;
+            }
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft') player.vx = -5;
+            if (e.key === 'ArrowRight') player.vx = 5;
+            if (e.key === ' ' && player.onGround) player.vy = -15;
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') player.vx = 0;
+        });
+
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            updatePlayer();
+
+            platforms.forEach(platform => {
+                platform.update();
+                platform.draw();
+            });
+
+            ctx.fillStyle = 'blue';
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Add platforms
+        addPlatform(0, canvas.height - 50, canvas.width, 50); // Ground
+        addPlatform(200, canvas.height - 100, 200, 20);
+        addPlatform(500, canvas.height - 200, 200, 20, true);
+        addPlatform(800, canvas.height - 300, 200, 20);
+
+        gameLoop();
+    </script>
+</body>
+</html>
